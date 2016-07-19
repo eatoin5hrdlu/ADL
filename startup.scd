@@ -1,7 +1,11 @@
+
+
 s = Server.local.boot;
 s.waitForBoot{
+	~mport = NetAddr("127.0.0.1", nil);
+	NetAddr.langPort.postln;
+    OSCFunc.newMatching({|msg, time, addr, recvPort| \matching.postln}, "/adl", ~mport);
 	~prevnode = nil;
-	~mport = NetAddr("127.0.0.1", NetAddr.langPort);
 
 ~files = [ "01c.wav",
 	       "02c.wav",
@@ -18,7 +22,7 @@ s.waitForBoot{
 		arg item,i; var b,p;
 		b = Buffer.read(s, "/home/peter/src/sc/sounds/"++item);
 		SynthDef(item, { Out.ar(0,PlayBuf.ar(1, b, BufRateScale.kr(b.bufnum), loop: 0));}).send(s);
-	    OSCFunc({~adl.value(i)}, "/adl", ~mport, nil, [i]);
+	    OSCFunc.newMatching({|msg,time,addr,recvPort| \matching.postln; ~adl.value(msg[1]); msg[1].postln},'/adl', ~mport).add;
 	});
 
 	~adl = {
