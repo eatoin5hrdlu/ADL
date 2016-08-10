@@ -27,66 +27,69 @@ files = [ "01c.wav",
           "1ac.wav",
           "19c-old.wav"];
 
-reset = False
-recent =  0
+state = 0
+idle = 0
+summercount = 1
+fallcount = 2
+
+recent =  time.time()
 summer = 0
 fall = 0
 
-def  summerbuttons() :
-    gd = GPIO.input(button[0]) or GPIO.input(button[2]) or GPIO.input(button[4])
-    print("sb "+str(gd))
-    return not gd
-
-def  fallbuttons ():
-    gd = GPIO.input(button[1]) or GPIO.input(button[3]) or GPIO.input(button[5])
-    print("fb "+str(gd))
-    return not gd
-
-
-def seasonal() :
-    global recent
-    global reset
-    global summer
-    global fall
-    now = time.time()
-    if ( now - recent < 2):
-        return
-    if (not reset and not summerbuttons() and not fallbuttons()): # Buttons up
-        reset = True
-        recent = now
-        return
-    
-    if (reset and summerbuttons()) :
-        summer = summer + 1
-        print("summer = "+str(summer))
-        if (summer > 2) :
-            summer = 0
-            fall = 0
-            reset = True
-            fp = open('season.txt','w')
-            print(fp,"summer\n")
-            print("summer\n")
-            close(fp)
-            time.sleep(2)
-        reset = False
-    elif (reset and fallbuttons()) :
-        fall = fall + 1
-        print("fall = "+str(fall))
-        if (fall > 2) :
-            summer = 0
-            fall = 0
-            reset = True
-            fp = open('season.txt','w')
-            print(fp,"fall\n")
-            print("fall\n")
-            close(fp)
-            time.sleep(2)
-        reset = False
-    else :
-        reset = True  # Buttons released
-
+def resetstate(now) :
+    global state, idle, summer, fall, recent
+    state = idle
+    summer = 0
+    fall = 0
     recent = now
     
+def  checkCount() :
+    global recent
+    global state, idle, summercount, fallcount
+    global summer, fall
+    now = time.time()
+    if (recent > now) : # overflow
+        resetstate(now)
+        return
+    if (now - recent < 2) : # not yet
+        return
+    if (now - recent > 60) : # timed out
+        resetstate()
+        return
+    # Check for the two secret button patterns
+    sc = not (GPIO.input(button[0]) or GPIO.input(button[2]) or GPIO.input(button[4]))
+    fc = not (GPIO.input(button[1]) or GPIO.input(button[3]) or GPIO.input(button[5]))
+    if (state == idle) :
+        if (sc) :
+            summer = 0
+            state = summercount
+            recent = now
+        elif (fc) :
+            fall = 0
+            state = fallcount
+        recent = now
+    if (sc and state==summercount) :
+        summer = summer + 1
+        recent = now
+    if (fc and state==fallcount) :
+        fall = fall + 1
+        recent = time.time()
+    if (sc and state=fallcount) :
+        resetstate(now)
+    if (fc and state=summercount) :
+        resetstate(now)
+    if (sc and summercount > 2):
+        fp = open('season.txt','w')
+        print(fp,"summer\n")
+        print("summer\n")
+        close(fp)
+        resetstate(now)
+    if (fc and fallcount > 2):
+        fp = open('season.txt','w')
+        print(fp,"fall\n")
+        print("fall\n")
+        close(fp)
+        resetstate(now)
 
 GPIO.setmode(GPIO.BCM) # Broadcom pin-numbering scheme
 
@@ -99,7 +102,7 @@ proc = None
 proc = subprocess.Popen(['/usr/bin/aplay','02c.wav'])
 
 while 1:
-    seasonal()
+    checkCount()
     allup = True
     for i in range(len(button)) :
         if ( GPIO.input(button[i]) == 0 ) :
